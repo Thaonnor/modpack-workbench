@@ -6,12 +6,19 @@ import { open } from "@tauri-apps/plugin-dialog";
 interface FileInfo {
   name: string;
   path: string;
-  size: number;
+}
+
+interface JarEntry {
+  name: string;
+  is_dir: boolean;
 }
 
 const selectedFolder = ref("");
 const scanResults = ref<FileInfo[]>([]);
 const scanError = ref("");
+const selectedJar = ref<FileInfo | null>(null);
+const jarContents = ref<JarEntry[]>([]);
+const jarError = ref("");
 
 async function selectFolder() {
   const selected = await open({
@@ -33,11 +40,31 @@ async function scanMods() {
 
   try {
     scanError.value = "";
+    selectedJar.value = null;
+    jarContents.value = [];
+    jarError.value = "";
     scanResults.value = await invoke<FileInfo[]>("scan_folder", { path: selectedFolder.value });
   } catch (e) {
     scanError.value = String(e);
     scanResults.value = [];
   }
+}
+
+async function viewJarContents(file: FileInfo) {
+  try {
+    jarError.value = "";
+    selectedJar.value = file;
+    jarContents.value = await invoke<JarEntry[]>("get_jar_contents", { path: file.path });
+  } catch (e) {
+    jarError.value = String(e);
+    jarContents.value = [];
+  }
+}
+
+function closeJarViewer() {
+  selectedJar.value = null;
+  jarContents.value = [];
+  jarError.value = "";
 }
 </script>
 
@@ -72,14 +99,46 @@ async function scanMods() {
         <p>{{ scanError }}</p>
       </div>
 
-      <div v-if="scanResults.length > 0" class="results">
+      <div v-if="scanResults.length > 0" class="panel results">
         <h3>Scan Results ({{ scanResults.length }} jar files found)</h3>
         <ul class="file-list">
-          <li v-for="file in scanResults" :key="file.path" class="file-item" :title="file.path">
+          <li
+            v-for="file in scanResults"
+            :key="file.path"
+            class="file-item clickable"
+            :class="{ selected: selectedJar?.path === file.path }"
+            :title="file.path"
+            @click="viewJarContents(file)"
+          >
             <span class="file-name">{{ file.name }}</span>
-            <span class="file-size">{{ (file.size / 1024).toFixed(1) }} KB</span>
           </li>
         </ul>
+      </div>
+
+      <div v-if="selectedJar" class="panel jar-contents">
+        <div class="jar-header">
+          <h3>Contents of {{ selectedJar.name }}</h3>
+          <button @click="closeJarViewer" class="close-btn">Close</button>
+        </div>
+
+        <div v-if="jarError" class="error">
+          <p>{{ jarError }}</p>
+        </div>
+
+        <div v-else-if="jarContents.length > 0" class="contents-info">
+          <p>{{ jarContents.length }} recipe entries found</p>
+          <ul class="entry-list">
+            <li v-for="entry in jarContents" :key="entry.name" class="entry-item">
+              <span class="entry-name" :class="{ 'is-dir': entry.is_dir }">
+                {{ entry.name }}
+              </span>
+            </li>
+          </ul>
+        </div>
+
+        <div v-else class="empty-state">
+          <p>No recipe entries found in this jar</p>
+        </div>
       </div>
     </div>
   </main>
@@ -158,7 +217,7 @@ async function scanMods() {
   cursor: not-allowed;
 }
 
-.results {
+.panel {
   background: #f8f9fa;
   border: 1px solid #e9ecef;
   border-radius: 8px;
@@ -188,11 +247,8 @@ async function scanMods() {
 }
 
 .file-item {
-  display: flex;
-  align-items: center;
   padding: 0.5em;
   border-bottom: 1px solid #e0e0e0;
-  gap: 0.5em;
 }
 
 .file-item:last-child {
@@ -200,14 +256,88 @@ async function scanMods() {
 }
 
 .file-name {
-  flex: 1;
   font-family: monospace;
   font-size: 0.9em;
 }
 
-.file-size {
+.file-item.clickable {
+  cursor: pointer;
+}
+
+.file-item.clickable:hover {
+  background: #e3f2fd;
+}
+
+.file-item.selected {
+  background: #bbdefb;
+}
+
+
+.jar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1em;
+}
+
+.jar-header h3 {
+  margin: 0;
+  color: #333;
+  word-break: break-all;
+}
+
+.close-btn {
+  background: #f44336;
+  color: white;
+  padding: 0.4em 0.8em;
+  font-size: 0.9em;
+}
+
+.close-btn:hover {
+  background: #d32f2f;
+  border-color: #d32f2f;
+}
+
+.contents-info p {
+  margin: 0 0 1em 0;
   color: #666;
-  font-size: 0.8em;
+}
+
+.entry-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.entry-item {
+  padding: 0.3em 0.5em;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.entry-item:last-child {
+  border-bottom: none;
+}
+
+.entry-name {
+  font-family: monospace;
+  font-size: 0.85em;
+  word-break: break-all;
+}
+
+.entry-name.is-dir {
+  color: #1976d2;
+}
+
+.empty-state {
+  text-align: center;
+  color: #666;
+  font-style: italic;
+}
+
+.empty-state p {
+  margin: 0;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -224,12 +354,13 @@ async function scanMods() {
     color: #f6f6f6;
   }
 
-  .results {
+  .panel {
     background: #2a2a2a;
     border-color: #555;
   }
 
-  .results h3 {
+  .results h3,
+  .jar-header h3 {
     color: #f6f6f6;
   }
 
@@ -243,8 +374,25 @@ async function scanMods() {
     border-bottom-color: #555;
   }
 
-  .file-size {
+  .file-item.clickable:hover {
+    background: #3a3a3a;
+  }
+
+  .file-item.selected {
+    background: #1565c0;
+  }
+
+  .contents-info p,
+  .empty-state {
     color: #aaa;
+  }
+
+  .entry-item {
+    border-bottom-color: #555;
+  }
+
+  .entry-name.is-dir {
+    color: #64b5f6;
   }
 }
 </style>
