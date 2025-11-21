@@ -4,7 +4,13 @@
       "Bash(dir)",
       "Bash(git add:*)",
       "Bash(git push:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git -C \"C:\\Local Repo\\mod_workbench\" status)",
+      "Bash(git -C \"C:\\Local Repo\\mod_workbench\" diff --staged)",
+      "Bash(git -C \"C:\\Local Repo\\mod_workbench\" log --oneline -5)",
+      "Bash(git -C \"C:\\Local Repo\\mod_workbench\" add CLAUDE.md src-tauri/Cargo.lock src-tauri/Cargo.toml src-tauri/src/lib.rs src-tauri/src/scanner.rs src/App.vue .claude/commands/)",
+      "Bash(git -C \"C:\\Local Repo\\mod_workbench\" commit -m \"$(cat <<''EOF''\nAdd jar recipe entry viewer\n\n- Add zip crate to read jar file contents\n- Filter jar entries to data/*/recipe(s)/ paths\n- Display recipe entries when clicking a jar file\n- Show empty state when no recipes found\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git -C \"C:\\Local Repo\\mod_workbench\" push)"
     ],
     "deny": [],
     "ask": []
