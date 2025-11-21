@@ -1,50 +1,174 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-opener";
 
-const greetMsg = ref("");
-const name = ref("");
+const selectedFolder = ref("");
+const scanResults = ref("");
 
-async function greet() {
-  // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-  greetMsg.value = await invoke("greet", { name: name.value });
+async function selectFolder() {
+  // This will be implemented later with proper folder picker
+  // For now, just show a placeholder
+  selectedFolder.value = "C:\\path\\to\\mods\\folder";
+}
+
+async function scanMods() {
+  if (!selectedFolder.value) {
+    scanResults.value = "Please select a mods folder first";
+    return;
+  }
+
+  // Call the scanner test for now
+  scanResults.value = await invoke("scanner_test");
 }
 </script>
 
 <template>
   <main class="container">
-    <h1>Welcome to Tauri + Vue</h1>
+    <h1>Modpack Workbench</h1>
+    <p>Minecraft recipe scanner and analyzer</p>
 
-    <div class="row">
-      <a href="https://vite.dev" target="_blank">
-        <img src="/vite.svg" class="logo vite" alt="Vite logo" />
-      </a>
-      <a href="https://tauri.app" target="_blank">
-        <img src="/tauri.svg" class="logo tauri" alt="Tauri logo" />
-      </a>
-      <a href="https://vuejs.org/" target="_blank">
-        <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
-      </a>
+    <div class="scanner-section">
+      <h2>Select Mods Folder</h2>
+
+      <div class="folder-picker">
+        <div class="folder-display">
+          <span v-if="selectedFolder" class="selected-path">{{ selectedFolder }}</span>
+          <span v-else class="placeholder">No folder selected</span>
+        </div>
+        <button @click="selectFolder" class="folder-btn">Browse Folder</button>
+      </div>
+
+      <div class="scan-section">
+        <button
+          @click="scanMods"
+          :disabled="!selectedFolder"
+          class="scan-btn"
+          :class="{ disabled: !selectedFolder }"
+        >
+          Scan Mods
+        </button>
+      </div>
+
+      <div v-if="scanResults" class="results">
+        <h3>Scan Results</h3>
+        <p>{{ scanResults }}</p>
+      </div>
     </div>
-    <p>Click on the Tauri, Vite, and Vue logos to learn more.</p>
-
-    <form class="row" @submit.prevent="greet">
-      <input id="greet-input" v-model="name" placeholder="Enter a name..." />
-      <button type="submit">Greet</button>
-    </form>
-    <p>{{ greetMsg }}</p>
   </main>
 </template>
 
 <style scoped>
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
+.scanner-section {
+  max-width: 600px;
+  margin: 2em auto;
+  text-align: left;
 }
 
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #249b73);
+.scanner-section h2 {
+  margin-bottom: 1em;
+  color: #333;
 }
 
+.folder-picker {
+  display: flex;
+  gap: 1em;
+  margin-bottom: 2em;
+  align-items: center;
+}
+
+.folder-display {
+  flex: 1;
+  padding: 0.8em;
+  border: 2px dashed #ccc;
+  border-radius: 8px;
+  min-height: 1.5em;
+  display: flex;
+  align-items: center;
+}
+
+.selected-path {
+  font-family: monospace;
+  color: #333;
+}
+
+.placeholder {
+  color: #999;
+  font-style: italic;
+}
+
+.folder-btn {
+  background: #646cff;
+  color: white;
+  border: none;
+  white-space: nowrap;
+}
+
+.folder-btn:hover {
+  background: #535bf2;
+  border-color: #535bf2;
+}
+
+.scan-section {
+  text-align: center;
+  margin-bottom: 2em;
+}
+
+.scan-btn {
+  background: #4caf50;
+  color: white;
+  border: none;
+  font-size: 1.1em;
+  padding: 0.8em 2em;
+}
+
+.scan-btn:hover:not(.disabled) {
+  background: #45a049;
+  border-color: #45a049;
+}
+
+.scan-btn.disabled {
+  background: #ccc;
+  color: #666;
+  cursor: not-allowed;
+}
+
+.results {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 1.5em;
+  margin-top: 2em;
+}
+
+.results h3 {
+  margin-top: 0;
+  color: #333;
+}
+
+@media (prefers-color-scheme: dark) {
+  .scanner-section h2 {
+    color: #f6f6f6;
+  }
+
+  .folder-display {
+    border-color: #555;
+    background: #2a2a2a;
+  }
+
+  .selected-path {
+    color: #f6f6f6;
+  }
+
+  .results {
+    background: #2a2a2a;
+    border-color: #555;
+  }
+
+  .results h3 {
+    color: #f6f6f6;
+  }
+}
 </style>
 <style>
 :root {
