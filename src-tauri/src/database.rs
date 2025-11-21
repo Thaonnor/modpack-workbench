@@ -17,6 +17,7 @@ pub struct Recipe {
     pub result_item: Option<String>,
     pub result_count: Option<i32>,
     pub ingredients: Vec<String>,
+    pub raw_json: String,
 }
 
 #[derive(Serialize)]
@@ -143,99 +144,50 @@ impl Database {
 
     pub fn search_by_output(&self, item: &str) -> SqliteResult<Vec<Recipe>> {
         let conn = self.conn.lock().unwrap();
-
+        let search_term = format!("%{}%", item);
         let mut stmt = conn.prepare(
-            "SELECT r.id, m.name, r.path, r.recipe_type, r.result_item, r.result_count
+            "SELECT r.id, m.name, r.path, r.recipe_type, r.result_item, r.result_count, r.raw_json
              FROM recipes r
              JOIN mods m ON r.mod_id = m.id
              WHERE r.result_item LIKE ?1
              ORDER BY r.result_item, m.name"
         )?;
-
-        let search_term = format!("%{}%", item);
-        let recipe_rows = stmt.query_map([&search_term], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, Option<String>>(4)?,
-                row.get::<_, Option<i32>>(5)?,
-            ))
-        })?;
-
-        let mut recipes = Vec::new();
-        for row in recipe_rows {
-            let (id, mod_name, path, recipe_type, result_item, result_count) = row?;
-            let ingredients = self.get_ingredients_for_recipe(&conn, id)?;
-            recipes.push(Recipe {
-                id,
-                mod_name,
-                path,
-                recipe_type,
-                result_item,
-                result_count,
-                ingredients,
-            });
-        }
-
-        Ok(recipes)
+        self.collect_recipes(&conn, &mut stmt, &[&search_term])
     }
 
     pub fn search_by_ingredient(&self, item: &str) -> SqliteResult<Vec<Recipe>> {
         let conn = self.conn.lock().unwrap();
-
+        let search_term = format!("%{}%", item);
         let mut stmt = conn.prepare(
-            "SELECT DISTINCT r.id, m.name, r.path, r.recipe_type, r.result_item, r.result_count
+            "SELECT DISTINCT r.id, m.name, r.path, r.recipe_type, r.result_item, r.result_count, r.raw_json
              FROM recipes r
              JOIN mods m ON r.mod_id = m.id
              JOIN recipe_ingredients ri ON r.id = ri.recipe_id
              WHERE ri.item LIKE ?1
              ORDER BY r.result_item, m.name"
         )?;
-
-        let search_term = format!("%{}%", item);
-        let recipe_rows = stmt.query_map([&search_term], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, Option<String>>(4)?,
-                row.get::<_, Option<i32>>(5)?,
-            ))
-        })?;
-
-        let mut recipes = Vec::new();
-        for row in recipe_rows {
-            let (id, mod_name, path, recipe_type, result_item, result_count) = row?;
-            let ingredients = self.get_ingredients_for_recipe(&conn, id)?;
-            recipes.push(Recipe {
-                id,
-                mod_name,
-                path,
-                recipe_type,
-                result_item,
-                result_count,
-                ingredients,
-            });
-        }
-
-        Ok(recipes)
+        self.collect_recipes(&conn, &mut stmt, &[&search_term])
     }
 
     pub fn list_recipes(&self, offset: i64, limit: i64) -> SqliteResult<Vec<Recipe>> {
         let conn = self.conn.lock().unwrap();
-
         let mut stmt = conn.prepare(
-            "SELECT r.id, m.name, r.path, r.recipe_type, r.result_item, r.result_count
+            "SELECT r.id, m.name, r.path, r.recipe_type, r.result_item, r.result_count, r.raw_json
              FROM recipes r
              JOIN mods m ON r.mod_id = m.id
              ORDER BY m.name, r.path
              LIMIT ?1 OFFSET ?2"
         )?;
+        self.collect_recipes(&conn, &mut stmt, &[&limit, &offset])
+    }
 
-        let recipe_rows = stmt.query_map([limit, offset], |row| {
+    fn collect_recipes(
+        &self,
+        conn: &Connection,
+        stmt: &mut rusqlite::Statement,
+        params: &[&dyn rusqlite::ToSql],
+    ) -> SqliteResult<Vec<Recipe>> {
+        let recipe_rows = stmt.query_map(params, |row| {
             Ok((
                 row.get::<_, i64>(0)?,
                 row.get::<_, String>(1)?,
@@ -243,13 +195,14 @@ impl Database {
                 row.get::<_, String>(3)?,
                 row.get::<_, Option<String>>(4)?,
                 row.get::<_, Option<i32>>(5)?,
+                row.get::<_, String>(6)?,
             ))
         })?;
 
         let mut recipes = Vec::new();
         for row in recipe_rows {
-            let (id, mod_name, path, recipe_type, result_item, result_count) = row?;
-            let ingredients = self.get_ingredients_for_recipe(&conn, id)?;
+            let (id, mod_name, path, recipe_type, result_item, result_count, raw_json) = row?;
+            let ingredients = self.get_ingredients_for_recipe(conn, id)?;
             recipes.push(Recipe {
                 id,
                 mod_name,
@@ -258,9 +211,9 @@ impl Database {
                 result_item,
                 result_count,
                 ingredients,
+                raw_json,
             });
         }
-
         Ok(recipes)
     }
 

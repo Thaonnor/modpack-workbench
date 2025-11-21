@@ -22,6 +22,12 @@ interface Recipe {
   result_item: string | null;
   result_count: number | null;
   ingredients: string[];
+  raw_json: string;
+}
+
+interface ShapedRecipeData {
+  pattern: string[];
+  key: Record<string, { item?: string; tag?: string }>;
 }
 
 interface ExtractionResult {
@@ -34,6 +40,7 @@ interface ExtractionProgress {
   current: number;
   total: number;
   current_mod: string;
+  recipes_extracted: number;
 }
 
 const selectedFolder = ref("");
@@ -207,6 +214,34 @@ function clearSearch() {
   currentPage.value = 0;
   loadRecipes();
 }
+
+function parseShapedRecipe(recipe: Recipe): ShapedRecipeData | null {
+  if (!recipe.recipe_type.endsWith("crafting_shaped")) {
+    return null;
+  }
+  try {
+    const data = JSON.parse(recipe.raw_json);
+    if (data.pattern && data.key) {
+      return {
+        pattern: data.pattern,
+        key: data.key
+      };
+    }
+  } catch (e) {
+    console.warn('Failed to parse shaped recipe:', recipe.path, e);
+  }
+  return null;
+}
+
+function getKeyItem(keyEntry: { item?: string; tag?: string }): string {
+  if (keyEntry.item) {
+    return keyEntry.item;
+  }
+  if (keyEntry.tag) {
+    return "#" + keyEntry.tag;
+  }
+  return "?";
+}
 </script>
 
 <template>
@@ -260,7 +295,7 @@ function clearSearch() {
             ></div>
           </div>
           <p class="progress-text">
-            {{ extractionProgress.current }} / {{ extractionProgress.total }}: {{ extractionProgress.current_mod }}
+            {{ extractionProgress.current + 1 }}/{{ extractionProgress.total }}: {{ extractionProgress.current_mod }} ({{ extractionProgress.recipes_extracted.toLocaleString() }} recipes)
           </p>
         </div>
 
@@ -324,10 +359,43 @@ function clearSearch() {
                 <span class="recipe-type">{{ recipe.recipe_type }}</span>
               </div>
             </div>
-            <div v-if="recipe.ingredients.length > 0" class="recipe-inputs">
-              <span class="label">Inputs:</span>
-              <span class="value">{{ recipe.ingredients.join(", ") }}</span>
-            </div>
+
+            <template v-for="shaped in [parseShapedRecipe(recipe)]" :key="'shaped'">
+              <div v-if="shaped" class="shaped-recipe">
+                <div class="crafting-grid">
+                  <div
+                    v-for="(row, rowIdx) in shaped.pattern"
+                    :key="rowIdx"
+                    class="grid-row"
+                  >
+                    <div
+                      v-for="(char, colIdx) in row.split('')"
+                      :key="colIdx"
+                      class="grid-cell"
+                    >
+                      {{ char === ' ' ? '' : char }}
+                    </div>
+                  </div>
+                </div>
+                <div class="key-legend">
+                  <div
+                    v-for="(value, key) in shaped.key"
+                    :key="key"
+                    class="key-entry"
+                  >
+                    <span class="key-char">{{ key }}</span>
+                    <span class="key-sep">=</span>
+                    <span class="key-item">{{ getKeyItem(value) }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div v-else-if="recipe.ingredients.length > 0" class="recipe-inputs">
+                <span class="label">Inputs:</span>
+                <span class="value">{{ recipe.ingredients.join(", ") }}</span>
+              </div>
+            </template>
+
             <div class="recipe-source">
               <span class="label">Source:</span>
               <span class="value">{{ recipe.mod_name }}</span>
@@ -628,6 +696,60 @@ function clearSearch() {
   border-radius: 3px;
 }
 
+.shaped-recipe {
+  display: flex;
+  gap: 1em;
+  margin: 0.5em 0;
+  align-items: flex-start;
+}
+
+.crafting-grid {
+  display: inline-block;
+  border: 1px solid #999;
+}
+
+.grid-row {
+  display: flex;
+}
+
+.grid-cell {
+  width: 1.5em;
+  height: 1.5em;
+  border: 1px solid #ccc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: monospace;
+  font-size: 0.9em;
+  background: #f8f8f8;
+}
+
+.key-legend {
+  font-size: 0.85em;
+  font-family: monospace;
+}
+
+.key-entry {
+  margin-bottom: 0.25em;
+}
+
+.key-char {
+  display: inline-block;
+  width: 1.2em;
+  font-weight: bold;
+  color: #333;
+}
+
+.key-sep {
+  color: #999;
+  margin: 0 0.3em;
+}
+
+.key-item {
+  color: #666;
+  word-break: break-all;
+}
+
 .pagination {
   display: flex;
   justify-content: center;
@@ -855,6 +977,27 @@ function clearSearch() {
   .recipe-type {
     background: #444;
     color: #ccc;
+  }
+
+  .crafting-grid {
+    border-color: #666;
+  }
+
+  .grid-cell {
+    border-color: #555;
+    background: #3a3a3a;
+  }
+
+  .key-char {
+    color: #f6f6f6;
+  }
+
+  .key-sep {
+    color: #666;
+  }
+
+  .key-item {
+    color: #aaa;
   }
 
   .progress-bar {

@@ -5,4 +5,4 @@
 
 ## Recent Work
 
-Added jar file reading using the `zip` crate - can scan a mods folder for jars, then view contents filtered to `data/*/recipe/` or `data/*/recipes/` paths for recipe extraction. Next step is to extract and parse the actual recipe JSON files.
+Recipe extraction and display implemented. Recipes are stored in SQLite with full JSON preserved. Progress bar now shows recipe count with batched updates (every 50 recipes). Shaped crafting recipes display in a visual 3x3 grid with normalized keys (A, B, C, etc.) mapped to ingredients. Non-shaped recipes fall back to comma-separated ingredient list.

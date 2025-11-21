@@ -10,11 +10,14 @@ use std::io::Read;
 use std::sync::OnceLock;
 use zip::ZipArchive;
 
+const PROGRESS_EMIT_BATCH_SIZE: usize = 50;
+
 #[derive(Clone, Serialize)]
 struct ExtractionProgress {
     current: usize,
     total: usize,
     current_mod: String,
+    recipes_extracted: usize,
 }
 
 static DATABASE: OnceLock<Database> = OnceLock::new();
@@ -47,6 +50,8 @@ async fn extract_all_recipes(app: AppHandle, paths: Vec<String>) -> Result<Extra
         let mut errors = Vec::new();
         let total = paths.len();
 
+        let mut last_emitted_count = 0;
+
         for (index, jar_path) in paths.iter().enumerate() {
             // Extract mod name from jar filename
             let mod_name = std::path::Path::new(jar_path)
@@ -54,12 +59,14 @@ async fn extract_all_recipes(app: AppHandle, paths: Vec<String>) -> Result<Extra
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_else(|| jar_path.clone());
 
-            // Emit progress event
+            // Emit progress event at start of each mod
             let _ = app.emit("extraction-progress", ExtractionProgress {
-                current: index + 1,
+                current: index,
                 total,
                 current_mod: mod_name.clone(),
+                recipes_extracted,
             });
+            last_emitted_count = recipes_extracted;
 
             let file = match File::open(jar_path) {
                 Ok(f) => f,
@@ -135,7 +142,18 @@ async fn extract_all_recipes(app: AppHandle, paths: Vec<String>) -> Result<Extra
                     &contents,
                     &parsed.ingredients,
                 ) {
-                    Ok(_) => recipes_extracted += 1,
+                    Ok(_) => {
+                        recipes_extracted += 1;
+                        if recipes_extracted - last_emitted_count >= PROGRESS_EMIT_BATCH_SIZE {
+                            let _ = app.emit("extraction-progress", ExtractionProgress {
+                                current: index,
+                                total,
+                                current_mod: mod_name.clone(),
+                                recipes_extracted,
+                            });
+                            last_emitted_count = recipes_extracted;
+                        }
+                    }
                     Err(e) => {
                         errors.push(format!("{}:{}: {}", mod_name, entry_name, e));
                     }
