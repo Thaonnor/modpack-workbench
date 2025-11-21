@@ -1,0 +1,4 @@
+- Never use icons in text display to users.
+- Always prefer simpler, more readable code rather than complexity.
+- Be vigilant about identifying and refactoring dead code.
+- Prefer short commit messages.

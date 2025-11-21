@@ -1,25 +1,43 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-opener";
+import { open } from "@tauri-apps/plugin-dialog";
+
+interface FileInfo {
+  name: string;
+  path: string;
+  size: number;
+}
 
 const selectedFolder = ref("");
-const scanResults = ref("");
+const scanResults = ref<FileInfo[]>([]);
+const scanError = ref("");
 
 async function selectFolder() {
-  // This will be implemented later with proper folder picker
-  // For now, just show a placeholder
-  selectedFolder.value = "C:\\path\\to\\mods\\folder";
+  const selected = await open({
+    directory: true,
+    multiple: false,
+    title: "Select Mods Folder"
+  });
+
+  if (selected) {
+    selectedFolder.value = selected as string;
+  }
 }
 
 async function scanMods() {
   if (!selectedFolder.value) {
-    scanResults.value = "Please select a mods folder first";
+    scanError.value = "Please select a mods folder first";
     return;
   }
 
-  // Call the scanner test for now
-  scanResults.value = await invoke("scanner_test");
+  try {
+    scanError.value = "";
+    scanResults.value = await invoke<FileInfo[]>("scan_folder", { path: selectedFolder.value });
+  } catch (e) {
+    scanError.value = String(e);
+    scanResults.value = [];
+  }
 }
 </script>
 
@@ -50,9 +68,18 @@ async function scanMods() {
         </button>
       </div>
 
-      <div v-if="scanResults" class="results">
-        <h3>Scan Results</h3>
-        <p>{{ scanResults }}</p>
+      <div v-if="scanError" class="error">
+        <p>{{ scanError }}</p>
+      </div>
+
+      <div v-if="scanResults.length > 0" class="results">
+        <h3>Scan Results ({{ scanResults.length }} jar files found)</h3>
+        <ul class="file-list">
+          <li v-for="file in scanResults" :key="file.path" class="file-item" :title="file.path">
+            <span class="file-name">{{ file.name }}</span>
+            <span class="file-size">{{ (file.size / 1024).toFixed(1) }} KB</span>
+          </li>
+        </ul>
       </div>
     </div>
   </main>
@@ -100,7 +127,6 @@ async function scanMods() {
 .folder-btn {
   background: #646cff;
   color: white;
-  border: none;
   white-space: nowrap;
 }
 
@@ -117,7 +143,6 @@ async function scanMods() {
 .scan-btn {
   background: #4caf50;
   color: white;
-  border: none;
   font-size: 1.1em;
   padding: 0.8em 2em;
 }
@@ -146,6 +171,45 @@ async function scanMods() {
   color: #333;
 }
 
+.error {
+  background: #ffebee;
+  border: 1px solid #f44336;
+  border-radius: 8px;
+  padding: 1em;
+  color: #c62828;
+}
+
+.file-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  padding: 0.5em;
+  border-bottom: 1px solid #e0e0e0;
+  gap: 0.5em;
+}
+
+.file-item:last-child {
+  border-bottom: none;
+}
+
+.file-name {
+  flex: 1;
+  font-family: monospace;
+  font-size: 0.9em;
+}
+
+.file-size {
+  color: #666;
+  font-size: 0.8em;
+}
+
 @media (prefers-color-scheme: dark) {
   .scanner-section h2 {
     color: #f6f6f6;
@@ -167,6 +231,20 @@ async function scanMods() {
 
   .results h3 {
     color: #f6f6f6;
+  }
+
+  .error {
+    background: #3e2723;
+    border-color: #d32f2f;
+    color: #ef9a9a;
+  }
+
+  .file-item {
+    border-bottom-color: #555;
+  }
+
+  .file-size {
+    color: #aaa;
   }
 }
 </style>
@@ -194,22 +272,6 @@ async function scanMods() {
   flex-direction: column;
   justify-content: center;
   text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
-.row {
-  display: flex;
-  justify-content: center;
 }
 
 a {
@@ -255,10 +317,6 @@ button:active {
 input,
 button {
   outline: none;
-}
-
-#greet-input {
-  margin-right: 5px;
 }
 
 @media (prefers-color-scheme: dark) {
